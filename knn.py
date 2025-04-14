@@ -72,20 +72,22 @@ def main():
     # Search over possible settings of k
     print("Performing 4-fold cross validation")
     for k in [1,3,5,7,9,99,999,8000]:
-      t0 = time.time()
+        t0 = time.time()
 
-      #######################################
-      # TODO Compute train accuracy using whole set
-      #######################################
-      train_acc = 0 
+        #######################################
+        # TODO Compute train accuracy using whole set
+        #######################################
+            
+        #knn_classify_point(train_X, train_y, test_X, k)
+        train_acc = 0 
 
-      #######################################
-      # TODO Compute 4-fold cross validation accuracy
-      #######################################
-      val_acc, val_acc_var = 0,0
-      
-      t1 = time.time()
-      print("k = {:5d} -- train acc = {:.2f}%  val acc = {:.2f}% ({:.4f})\t\t[exe_time = {:.2f}]".format(k, train_acc*100, val_acc*100, val_acc_var*100, t1-t0))
+        #######################################
+        # TODO Compute 4-fold cross validation accuracy
+        #######################################
+        val_acc, val_acc_var = cross_validation(train_X, train_y, k=k)
+        
+        t1 = time.time()
+        print("k = {:5d} -- train acc = {:.2f}%  val acc = {:.2f}% ({:.4f})\t\t[exe_time = {:.2f}]".format(k, train_acc*100, val_acc*100, val_acc_var*100, t1-t0))
     
     #######################################
 
@@ -102,7 +104,7 @@ def main():
     pred_test_y = predict(train_X, train_y, test_X, best_k)    
     
     # add index and header then save to file
-    test_out = np.concatenate((np.expand_dims(np.array(range(2000),dtype=np.int), axis=1), pred_test_y), axis=1)
+    test_out = np.concatenate((np.expand_dims(np.array(range(2000),dtype=int), axis=1), pred_test_y), axis=1)
     header = np.array([["id", "income"]])
     test_out = np.concatenate((header, test_out))
     np.savetxt('test_predicted.csv', test_out, fmt='%s', delimiter=',')
@@ -132,9 +134,15 @@ def main():
 ######################################################################
 
 def get_nearest_neighbors(example_set, query, k):
-    #TODO
-    return idx_of_nearest  
+    distances = np.linalg.norm(example_set - query, axis=1) # Computes row-wise norm
+    k_vals = np.argpartition(distances, kth=k-1)[:k] # indices of k smallest -- unsorted
 
+    if len(k_vals) > 1:
+        idx_of_nearest = k_vals[np.argsort(k_vals)]
+    else: idx_of_nearest = k_vals
+
+
+    return idx_of_nearest  
 
 ######################################################################
 # Q7 knn_classify_point 
@@ -157,11 +165,16 @@ def get_nearest_neighbors(example_set, query, k):
 ######################################################################
 
 def knn_classify_point(examples_X, examples_y, query, k):
-    #TODO
+
+    k_nearest = get_nearest_neighbors(examples_X, query, k)
+
+    sum = 0
+    for item in k_nearest:
+        sum += examples_y[item].item()
+
+    predicted_label = round(sum / k)
+
     return predicted_label
-
-
-
 
 ######################################################################
 # Q8 cross_validation 
@@ -180,8 +193,27 @@ def knn_classify_point(examples_X, examples_y, query, k):
 ######################################################################
 
 def cross_validation(train_X, train_y, num_folds=4, k=1):
-    #TODO
-    return avg_val_acc, varr_val_acc
+
+    subarrs_x = np.split(train_X, num_folds)
+    subarrs_y = np.split(train_y, num_folds)
+    predictions = []
+
+    for i in range(num_folds):
+        subtrain = []
+        subquery = subarrs_x[i]
+        labels = []
+
+        for j in range(num_folds):
+            subtrain = np.vstack([x for index, x in enumerate(subarrs_x) if index != i])
+            labels = np.vstack([x for index, x in enumerate(subarrs_y) if index != i])
+
+        predictions.extend(predict(subtrain, labels, subquery, k))
+
+    
+    avg_val_acc = compute_accuracy(np.vstack(predictions), train_y)
+    var_val_acc = np.var(predictions == train_y)
+
+    return avg_val_acc, var_val_acc
 
 
 
@@ -232,7 +264,7 @@ def predict(examples_X, examples_y, queries_X, k):
     # For each query, run a knn classifier
     predicted_y = [knn_classify_point(examples_X, examples_y, query, k) for query in queries_X]
 
-    return np.array(predicted_y,dtype=np.int)[:,np.newaxis]
+    return np.array(predicted_y,dtype=int)[:,np.newaxis]
 
 # Load data
 def load_data():

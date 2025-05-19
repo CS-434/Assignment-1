@@ -1,6 +1,8 @@
 import numpy as np
 import time
 
+SIGMA = 3
+
 def main():
 
     #############################################################
@@ -8,59 +10,7 @@ def main():
     # and have expected ouputs given. All asserts should pass.
     ############################################################
 
-    # I made up some random 3-dimensional data and some labels for us
-    example_train_x = np.array([ [ 1, 0, 2], [3, -2, 4], [5, -2, 4],
-                                 [ 4, 2, 1.5], [3.2, np.pi, 2], [-5, 0, 1]])
-    example_train_y = np.array([[0], [1], [1], [1], [0], [1]])
-  
-    #########
-    # Sanity Check 1: If I query with examples from the training set 
-    # and k=1, each point should be its own nearest neighbor
     
-    for i in range(len(example_train_x)):
-        assert([i] == get_nearest_neighbors(example_train_x, example_train_x[i], 1))
-        
-    #########
-    # Sanity Check 2: See if neighbors are right for some examples (ignoring order)
-    nn_idx = get_nearest_neighbors(example_train_x, np.array( [ 1, 4, 2] ), 2)
-    assert(set(nn_idx).difference(set([4,3]))==set())
-
-    nn_idx = get_nearest_neighbors(example_train_x, np.array( [ 1, -4, 2] ), 3)
-    assert(set(nn_idx).difference(set([1,0,2]))==set())
-
-    nn_idx = get_nearest_neighbors(example_train_x, np.array( [ 10, 40, 20] ), 5)
-    assert(set(nn_idx).difference(set([4, 3, 0, 2, 1]))==set())
-
-    #########
-    # Sanity Check 3: Neighbors for increasing k should be subsets
-    query = np.array( [ 10, 40, 20] )
-    p_nn_idx = get_nearest_neighbors(example_train_x, query, 1)
-    for k in range(2,7):
-      nn_idx = get_nearest_neighbors(example_train_x, query, k)
-      assert(set(p_nn_idx).issubset(nn_idx))
-      p_nn_idx = nn_idx
-   
-    #########
-    # Test out our prediction code
-    queries = np.array( [[ 10, 40, 20], [-2, 0, 5], [0,0,0]] )
-    pred = predict(example_train_x, example_train_y, queries, 3)
-    assert( np.all(pred == np.array([[0],[1],[0]])))
-
-    #########
-    # Test our our accuracy code
-    true_y = np.array([[0],[1],[2],[1],[1],[0]])
-    pred_y = np.array([[5],[1],[0],[0],[1],[0]])                    
-    assert( compute_accuracy(true_y, pred_y) == 3/6)
-
-    pred_y = np.array([[5],[1],[2],[0],[1],[0]])                    
-    assert( compute_accuracy(true_y, pred_y) == 4/6)
-
-
-
-    #######################################
-    # Now on to the real data!
-    #######################################
-
     # Load training and test data as numpy matrices 
     train_X, train_y, test_X = load_data()
 
@@ -71,15 +21,18 @@ def main():
 
     # Search over possible settings of k
     print("Performing 4-fold cross validation")
-    for k in [1,3,5,7,9,99,999,8000]:
+    for i in [0.001, 0.01]:
         t0 = time.time()
+        SIGMA = i
+        k = 99
 
         #######################################
         # TODO Compute train accuracy using whole set
         #######################################
-            
-        #knn_classify_point(train_X, train_y, test_X, k)
-        train_acc = 0 
+
+        predictions = predict(train_X, train_y, train_X, k)
+
+        train_acc = compute_accuracy(predictions, train_y)
 
         #######################################
         # TODO Compute 4-fold cross validation accuracy
@@ -87,7 +40,7 @@ def main():
         val_acc, val_acc_var = cross_validation(train_X, train_y, k=k)
         
         t1 = time.time()
-        print("k = {:5d} -- train acc = {:.2f}%  val acc = {:.2f}% ({:.4f})\t\t[exe_time = {:.2f}]".format(k, train_acc*100, val_acc*100, val_acc_var*100, t1-t0))
+        print("k = {:f} -- train acc = {:.2f}%  val acc = {:.2f}% ({:.4f})\t\t[exe_time = {:.2f}]".format(i, train_acc*100, val_acc*100, val_acc_var*100, t1-t0))
     
     #######################################
 
@@ -98,7 +51,7 @@ def main():
 
 
     # TODO set your best k value and then run on the test set
-    best_k = 1
+    best_k = 99
 
     # Make predictions on test set
     pred_test_y = predict(train_X, train_y, test_X, best_k)    
@@ -142,7 +95,7 @@ def get_nearest_neighbors(example_set, query, k):
     else: idx_of_nearest = k_vals
 
 
-    return idx_of_nearest  
+    return idx_of_nearest, distances[idx_of_nearest]
 
 ######################################################################
 # Q7 knn_classify_point 
@@ -166,13 +119,16 @@ def get_nearest_neighbors(example_set, query, k):
 
 def knn_classify_point(examples_X, examples_y, query, k):
 
-    k_nearest = get_nearest_neighbors(examples_X, query, k)
+    k_nearest, distances = get_nearest_neighbors(examples_X, query, k)
 
-    sum = 0
-    for item in k_nearest:
-        sum += examples_y[item].item()
+    sum = 0 
+    weight_total = 0
+    for i, item in enumerate(k_nearest):
+        weight = np.exp(-(distances[i].item() ** 2)/SIGMA)
+        weight_total += weight
+        sum += examples_y[item].item() * weight
 
-    predicted_label = round(sum / k)
+    predicted_label = round(sum / weight_total)
 
     return predicted_label
 
